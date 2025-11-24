@@ -88,6 +88,9 @@ class AsyncLLM(EngineClient):
         Returns:
             None
         """
+
+        logger.info(" >>> CUSTOM VLLM ENGINE IS STARTING <<< ")
+
         # Ensure we can serialize custom transformer configs
         maybe_register_config_serialize_by_value()
 
