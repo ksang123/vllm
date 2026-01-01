@@ -236,9 +236,28 @@ class UnquantizedLinearMethod(LinearMethodBase):
         layer: torch.nn.Module,
         x: torch.Tensor,
         bias: torch.Tensor | None = None,
+        opt: str | None = None,
     ) -> torch.Tensor:
-        return dispatch_unquantized_gemm()(layer, x, layer.weight, bias)
+        # ETAI EDIT
+        use_custom = False
+        if use_custom and opt and "gate_up_proj" in opt:
+            M, K = x.shape
+            N = layer.weight.shape[0]
+            if M == 256 and K == 4096 and N == 24576 and bias is None:
+                import l40s_opt_v2
+                
+                if not hasattr(layer, "_l40s_W"):
+                    layer._l40s_W = layer.weight.t()
+                    # print("running da kernel", flush=True)
+                
+                if (not hasattr(layer, "_l40s_out") or layer._l40s_out.device != x.device or layer._l40s_out.dtype != x.dtype or layer._l40s_out.shape != (256, 24576)):
+                    layer._l40s_out = torch.empty((256, 24576), device=x.device, dtype=x.dtype)                
 
+                out = layer._l40s_out[:x.shape[0], :]
+                l40s_opt_v2.gate_up_gemm(x, layer._l40s_W, out)
+                return out
+
+        return dispatch_unquantized_gemm()(layer, x, layer.weight, bias)
 
 class LinearBase(CustomOp):
     """Base linear layer.
@@ -560,9 +579,18 @@ class ColumnParallelLinear(LinearBase):
     ) -> torch.Tensor | tuple[torch.Tensor, Parameter | None]:
         bias = self.bias if not self.skip_bias_add else None
 
+        if False:
+            print("="*80, flush=True)
+            print("hello from forward!", flush=True)
+            print(f"prefix: {self.prefix}", flush=True)
+            print(f"TP size: {self.tp_size}, TP rank: {self.tp_rank}", flush=True)
+            print(f"gemm size: ({input_.shape[0]}, {input_.shape[1]}, {self.output_size_per_partition})")
+            print("="*80, flush=True)
+
         # Matrix multiply.
         assert self.quant_method is not None
         output_parallel = self.quant_method.apply(self, input_, bias)
+        # output_parallel = self.quant_method.apply(self, input_, bias, opt=self.prefix)
 
         if self.gather_output and self.tp_size > 1:
             # All-gather across the partitions.
@@ -624,8 +652,12 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         disable_tp: bool = False,
     ):
         self.output_sizes = output_sizes
-        self.tp_size = get_tensor_model_parallel_world_size() if not disable_tp else 1
-        self.tp_rank = get_tensor_model_parallel_rank() if not disable_tp else 0
+        if disable_tp:
+            self.tp_size = 1
+            self.tp_rank = 0
+        else:
+            self.tp_size = get_tensor_model_parallel_world_size()
+            self.tp_rank = get_tensor_model_parallel_rank()
 
         assert all(output_size % self.tp_size == 0 for output_size in output_sizes)
         super().__init__(

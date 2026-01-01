@@ -579,6 +579,7 @@ class Fp8LinearMethod(LinearMethodBase):
         # if batch invariant mode is enabled, prefer DeepGEMM FP8 path
         # we will use BF16 dequant when DeepGEMM is not supported.
         if vllm_is_batch_invariant():
+            print("batch invariant", flush=True)
             if self.block_quant:
                 assert self.weight_block_size is not None
                 return self.w8a8_block_fp8_linear.apply(
@@ -613,6 +614,7 @@ class Fp8LinearMethod(LinearMethodBase):
                 return torch.nn.functional.linear(x, weight_bf16.t(), bias)
 
         if self.use_marlin:
+            print("marlin?")
             return apply_fp8_marlin_linear(
                 input=x,
                 weight=layer.weight,
@@ -625,8 +627,10 @@ class Fp8LinearMethod(LinearMethodBase):
             )
 
         if self.block_quant:
+            print("not batch invariant", flush=True)
             assert self.weight_block_size is not None
-
+            # ETAI: THIS IS THE KERNEL THAT RUNS ON ADA (i think)
+            print("Using W8A8BlockFp8LinearOp", flush=True)
             return self.w8a8_block_fp8_linear.apply(
                 input=x,
                 weight=layer.weight,

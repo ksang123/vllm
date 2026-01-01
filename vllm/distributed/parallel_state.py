@@ -1511,14 +1511,16 @@ def patch_tensor_parallel_group(tp_group: GroupCoordinator):
         _TP_STATE_PATCHED = False
         _TP = old_tp_group
 
-
+# ETAI EDIT!!
 def get_tensor_model_parallel_world_size():
     """Return world size for the tensor model parallel group."""
+    return 1
     return get_tp_group().world_size
 
-
+# ETAI EDIT!!
 def get_tensor_model_parallel_rank():
     """Return my rank for the tensor model parallel group."""
+    return 0
     return get_tp_group().rank_in_group
 
 

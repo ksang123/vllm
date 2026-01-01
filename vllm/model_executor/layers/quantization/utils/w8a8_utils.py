@@ -411,7 +411,6 @@ class Fp8LinearOp:
                 self.preferred_backend = "cutlass"
         else:
             self.preferred_backend = "torch"
-
         # Note: we pad the input because torch._scaled_mm is more performant
         # for matrices with batch dimension > 16.
         # This could change in the future.

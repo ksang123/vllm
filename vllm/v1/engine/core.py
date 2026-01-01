@@ -459,6 +459,9 @@ class EngineCore:
         return engine_core_outputs, model_executed
 
     def shutdown(self):
+        from vllm.utils.kernel_logger import dump_kernel_log
+        dump_kernel_log()
+
         self.structured_output_manager.clear_backend()
         if self.model_executor:
             self.model_executor.shutdown()

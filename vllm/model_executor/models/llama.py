@@ -81,6 +81,9 @@ class LlamaMLP(nn.Module):
         reduce_results: bool = True,
         disable_tp: bool = False,
     ) -> None:
+        # print("=============================================", flush=True)
+        # print("initiating LLAMA MLP!", flush=True)
+        # print("=============================================", flush=True)
         super().__init__()
         self.gate_up_proj = MergedColumnParallelLinear(
             input_size=hidden_size,
@@ -106,7 +109,20 @@ class LlamaMLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
+        m, k = x.shape[0], x.shape[1]
+        
+        # import torch
+        # torch.cuda.nvtx.range_push("gate_up")
         x, _ = self.gate_up_proj(x)
+        # torch.cuda.synchronize()
+        # torch.cuda.nvtx.range_pop()
+        
+        from vllm.utils.kernel_logger import log_kernel
+        log_kernel(
+            "llama_mlp_gate_up",
+            (m, k, x.shape[1])
+        )
+
         x = self.act_fn(x)
         x, _ = self.down_proj(x)
         return x
@@ -239,7 +255,23 @@ class LlamaAttention(nn.Module):
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor:
+        # m, k = hidden_states.shape
+        # n = self.q_size + 2 * self.kv_size  # == 3 * hidden_size
+
+        # import torch
+        # torch.cuda.nvtx.range_push("qkv_proj")
+
         qkv, _ = self.qkv_proj(hidden_states)
+
+        # torch.cuda.synchronize()
+        # torch.cuda.nvtx.range_pop()
+
+        from vllm.utils.kernel_logger import log_kernel
+        log_kernel(
+            "llama_qkv_proj",
+            (m, k, n)
+        )
+        
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         q, k = self.rotary_emb(positions, q, k)
         if self.do_llama_4_scaling:

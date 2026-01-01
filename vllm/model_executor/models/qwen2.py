@@ -27,6 +27,7 @@
 
 from collections.abc import Iterable
 from itertools import islice
+import time
 from typing import Any
 
 import torch
@@ -89,6 +90,8 @@ class Qwen2MLP(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.gate_up_proj",
         )
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
         self.down_proj = RowParallelLinear(
             intermediate_size,
             hidden_size,
@@ -103,9 +106,33 @@ class Qwen2MLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
+        if x.is_cuda:
+            torch.cuda.synchronize()
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+            start_event.record()
+        else:
+            start_time = time.perf_counter()
+
         gate_up, _ = self.gate_up_proj(x)
+        
+        # from vllm.utils.kernel_logger import log_kernel
+        # log_kernel(
+        #     "qwen_mlp_gate_up",
+        #     (x.shape[0], self.hidden_size, 2 * self.intermediate_size)
+        # )
+
         x = self.act_fn(gate_up)
         x, _ = self.down_proj(x)
+
+        if x.is_cuda:
+            end_event.record()
+            torch.cuda.synchronize()
+            elapsed_ms = start_event.elapsed_time(end_event)
+        else:
+            elapsed_ms = (time.perf_counter() - start_time) * 1e3
+        if (x.shape[0] == 256):
+            print(f"qwen2_mlp_forward_ms: {elapsed_ms:.3f}")
         return x
 
 

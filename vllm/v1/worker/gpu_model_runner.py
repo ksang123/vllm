@@ -2828,6 +2828,8 @@ class GPUModelRunner(
         scheduler_output: "SchedulerOutput",
         intermediate_tensors: IntermediateTensors | None = None,
     ) -> ModelRunnerOutput | IntermediateTensors | None:
+        from vllm.utils import kernel_logger
+        kernel_logger.ENABLE_KERNEL_LOGGING = True
         if self.execute_model_state is not None:
             raise RuntimeError(
                 "State error: sample_tokens() must be called "
