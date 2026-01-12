@@ -418,6 +418,9 @@ class Fp8LinearMethod(LinearMethodBase):
                 use_aiter_and_is_supported=self.use_aiter_and_is_supported,
             )
         else:
+            print("using fp8_linear", flush=True)
+            print("act_q_static", self.act_q_static, flush=True)
+            print("act_q_group_shape", self.act_q_group_shape, flush=True)
             self.fp8_linear = Fp8LinearOp(
                 act_quant_static=self.act_q_static,
                 act_quant_group_shape=self.act_q_group_shape,
@@ -639,6 +642,7 @@ class Fp8LinearMethod(LinearMethodBase):
                 bias=bias,
             )
 
+        print("using fp8_linear", flush=True)
         return self.fp8_linear.apply(
             input=x,
             weight=layer.weight,
