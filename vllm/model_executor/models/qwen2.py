@@ -112,13 +112,14 @@ class Qwen2MLP(nn.Module):
         start_event.record()
 
         gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
-        x = self.act_fn(gate_up)
-        x, _ = self.down_proj(x, opt="down_proj")
+        x = self.act_fn(gate_up)        
 
         end_event.record()
         torch.cuda.synchronize()
         elapsed_ms = start_event.elapsed_time(end_event)
         print(f"qwen2_mlp_forward_ms: {elapsed_ms:.3f}")
+
+        x, _ = self.down_proj(x, opt="down_proj")
 
         from vllm.utils.kernel_logger import log_kernel
         log_kernel(
