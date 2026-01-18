@@ -457,6 +457,12 @@ class Fp8LinearOp:
 
         # If input not quantized
         # TODO(luka) remove this path if not used anymore
+
+        torch.cuda.synchronize()
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
+        
         if input.dtype != current_platform.fp8_dtype():
             qinput, x_scale = self.quant_fp8(
                 input_2d,
@@ -466,6 +472,10 @@ class Fp8LinearOp:
         else:
             qinput, x_scale = input_2d, input_scale
 
+        end_event.record()
+        torch.cuda.synchronize()
+        elapsed_ms = start_event.elapsed_time(end_event)
+        print(f"quant_fp8 time: {elapsed_ms:.3f} ms", flush=True)
         # Must have dim() conditions
         # In per-token quant scenario, when the number of token is 1,
         # the scale will only have 1 elements.
