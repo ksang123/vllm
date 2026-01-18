@@ -106,72 +106,26 @@ class Qwen2MLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
-        if x.is_cuda:
-            torch.cuda.synchronize()
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            start_event.record()
-        else:
-            start_time = time.perf_counter()
+        torch.cuda.synchronize()
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
 
-        # ETAI'S IMPLEMENTATION
-        gate_up, _ = self.gate_up_proj(x, opt="activate_kernel") # incudes SILU
+        gate_up, _ = self.gate_up_proj(x) # incudes SILU
         x = self.act_fn(gate_up)
         x, _ = self.down_proj(x)
 
-        if x.is_cuda:
-            end_event.record()
-            torch.cuda.synchronize()
-            elapsed_ms = start_event.elapsed_time(end_event)
-        else:
-            elapsed_ms = (time.perf_counter() - start_time) * 1e3
-        if (x.shape[0] == 256):
-            print(f"qwen2_mlp_forward_ms_etai: {elapsed_ms:.3f}")
+        end_event.record()
+        torch.cuda.synchronize()
+        elapsed_ms = start_event.elapsed_time(end_event)
+        print(f"qwen2_mlp_forward_ms: {elapsed_ms:.3f}")
 
+        from vllm.utils.kernel_logger import log_kernel
+        log_kernel(
+            "qwen2_mlp_forward",
+            x.shape[0]
+        )
 
-        if x.is_cuda:
-            torch.cuda.synchronize()
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            start_event.record()
-        else:
-            start_time = time.perf_counter()
-        
-        gate_up, _ = self.gate_up_proj(x)
-        x = self.act_fn(gate_up)
-        x, _ = self.down_proj(x)
-
-        if x.is_cuda:
-            end_event.record()
-            torch.cuda.synchronize()
-            elapsed_ms = start_event.elapsed_time(end_event)
-        else:
-            elapsed_ms = (time.perf_counter() - start_time) * 1e3
-        if (x.shape[0] == 256):
-            print(f"qwen2_mlp_forward_ms_ref: {elapsed_ms:.3f}")
-
-
-        gate_up, _ = self.gate_up_proj(x)
-        x = self.act_fn(gate_up)
-        
-        if x.is_cuda:
-            torch.cuda.synchronize()
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            start_event.record()
-        else:
-            start_time = time.perf_counter()
-        
-        x, _ = self.down_proj(x)
-
-        if x.is_cuda:
-            end_event.record()
-            torch.cuda.synchronize()
-            elapsed_ms = start_event.elapsed_time(end_event)
-        else:
-            elapsed_ms = (time.perf_counter() - start_time) * 1e3
-        if (x.shape[0] == 256):
-            print(f"qwen2_mlp_forward_ms_ref_down: {elapsed_ms:.3f}")
         return x
 
 
