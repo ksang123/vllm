@@ -458,10 +458,10 @@ class Fp8LinearOp:
         # If input not quantized
         # TODO(luka) remove this path if not used anymore
 
-        torch.cuda.synchronize()
-        start_event = torch.cuda.Event(enable_timing=True)
-        end_event = torch.cuda.Event(enable_timing=True)
-        start_event.record()
+        # torch.cuda.synchronize()
+        # start_event = torch.cuda.Event(enable_timing=True)
+        # end_event = torch.cuda.Event(enable_timing=True)
+        # start_event.record()
 
         if input.dtype != current_platform.fp8_dtype():
             qinput, x_scale = self.quant_fp8(
@@ -472,11 +472,11 @@ class Fp8LinearOp:
         else:
             qinput, x_scale = input_2d, input_scale
 
-        end_event.record()
-        torch.cuda.synchronize()
-        elapsed_ms = start_event.elapsed_time(end_event)
-        print(f"quant_fp8 time: {elapsed_ms:.3f} ms", flush=True)
-        print(opt, flush=True)
+        # end_event.record()
+        # torch.cuda.synchronize()
+        # elapsed_ms = start_event.elapsed_time(end_event)
+        # print(f"quant_fp8 time: {elapsed_ms:.3f} ms", flush=True)
+        # print(opt, flush=True)
 
         # Must have dim() conditions
         # In per-token quant scenario, when the number of token is 1,
@@ -489,14 +489,14 @@ class Fp8LinearOp:
         per_tensor_weights = weight_scale.numel() == 1
         per_tensor_activations = (x_scale.numel() == 1) and x_scale.dim() < 2
 
-        if opt and "activate_kernel" in opt:
-            import kernel2
-            H_fp8, H_scale = kernel2.gate_up_swiglu_fp8(
-                qinput,
-                x_scale,
-                weight,
-                weight_scale,
-            )
+        # if opt and "activate_kernel" in opt:
+        #     import kernel2
+        #     H_fp8, H_scale = kernel2.gate_up_swiglu_fp8(
+        #         qinput,
+        #         x_scale,
+        #         weight,
+        #         weight_scale,
+        #     )
 
         # TODO(luka) do this dispatch during init (after ScaledMM refactor)
         w8a8_scaled_mm_func = dispatch_w8a8_scaled_mm(
