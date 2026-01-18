@@ -111,9 +111,9 @@ class Qwen2MLP(nn.Module):
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
 
-        gate_up, _ = self.gate_up_proj(x) # incudes SILU
+        gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj") # incudes SILU
         x = self.act_fn(gate_up)
-        x, _ = self.down_proj(x)
+        x, _ = self.down_proj(x, opt="down_proj")
 
         end_event.record()
         torch.cuda.synchronize()
