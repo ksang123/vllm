@@ -106,13 +106,15 @@ class Qwen2MLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
+        gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
+
         torch.cuda.synchronize()
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
 
-        gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
-        x = self.act_fn(gate_up)        
+        x = self.act_fn(gate_up)
+
 
         end_event.record()
         torch.cuda.synchronize()
@@ -121,11 +123,11 @@ class Qwen2MLP(nn.Module):
 
         x, _ = self.down_proj(x, opt="down_proj")
 
-        from vllm.utils.kernel_logger import log_kernel
-        log_kernel(
-            "qwen2_mlp_forward",
-            (x.shape[0],)
-        )
+        # from vllm.utils.kernel_logger import log_kernel
+        # log_kernel(
+        #     "qwen2_mlp_forward",
+        #     (x.shape[0],)
+        # )
 
         return x
 
