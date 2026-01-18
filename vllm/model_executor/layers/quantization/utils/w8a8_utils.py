@@ -426,6 +426,7 @@ class Fp8LinearOp:
         self.output_padding = 17 if pad_output else None
         self.act_quant_static = act_quant_static
         self.act_quant_group_shape = act_quant_group_shape
+        # ETAI: This is the quantization kernel
         self.quant_fp8 = QuantFP8(
             static=act_quant_static,
             group_shape=act_quant_group_shape,
@@ -441,6 +442,7 @@ class Fp8LinearOp:
         input_scale: torch.Tensor | None = None,
         input_scale_ub: torch.Tensor | None = None,
         bias: torch.Tensor | None = None,
+        opt: str | None = None,
     ) -> torch.Tensor:
         # ops.scaled_fp8_quant supports both dynamic and static quant.
         #   If dynamic, layer.input_scale is None and x_scale computed from x.
@@ -475,10 +477,26 @@ class Fp8LinearOp:
         per_tensor_weights = weight_scale.numel() == 1
         per_tensor_activations = (x_scale.numel() == 1) and x_scale.dim() < 2
 
+        if opt and "activate_kernel" in opt:
+            import kernel2
+            H_fp8, H_scale = kernel2.gate_up_swiglu_fp8(
+                qinput,
+                x_scale,
+                weight,
+                weight_scale,
+            )
+
         # TODO(luka) do this dispatch during init (after ScaledMM refactor)
         w8a8_scaled_mm_func = dispatch_w8a8_scaled_mm(
             self.preferred_backend, per_tensor_weights, per_tensor_activations
         )
+
+        # print("weight_scale", weight_scale.shape, weight_scale.dtype, flush=True)
+        # print("x_scale", x_scale.shape, x_scale.dtype, flush=True)
+        # print("x_scale stride:", x_scale.stride(), flush=True)
+        # print("x_scale contig:", x_scale.is_contiguous(), flush=True)
+        # print("qinput", qinput.shape, qinput.dtype, flush=True)
+        # print("out_dtype", out_dtype, flush=True)
 
         return w8a8_scaled_mm_func(
             qinput=qinput,

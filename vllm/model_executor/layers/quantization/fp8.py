@@ -411,6 +411,9 @@ class Fp8LinearMethod(LinearMethodBase):
         if self.block_quant:
             assert not self.act_q_static
             assert self.weight_block_size is not None
+            # print("using w8a8_block_fp8_linear", flush=True)
+            # print("weight_block_size", self.weight_block_size, flush=True)
+            # print("weight_group_shape", GroupShape(*self.weight_block_size), flush=True)
             self.w8a8_block_fp8_linear = W8A8BlockFp8LinearOp(
                 weight_group_shape=GroupShape(*self.weight_block_size),
                 act_quant_group_shape=self.act_q_group_shape,
@@ -418,9 +421,9 @@ class Fp8LinearMethod(LinearMethodBase):
                 use_aiter_and_is_supported=self.use_aiter_and_is_supported,
             )
         else:
-            print("using fp8_linear", flush=True)
-            print("act_q_static", self.act_q_static, flush=True)
-            print("act_q_group_shape", self.act_q_group_shape, flush=True)
+            # print("using fp8_linear", flush=True)
+            # print("act_q_static", self.act_q_static, flush=True)
+            # print("act_q_group_shape", self.act_q_group_shape, flush=True)
             self.fp8_linear = Fp8LinearOp(
                 act_quant_static=self.act_q_static,
                 act_quant_group_shape=self.act_q_group_shape,
@@ -578,11 +581,12 @@ class Fp8LinearMethod(LinearMethodBase):
         layer: torch.nn.Module,
         x: torch.Tensor,
         bias: torch.Tensor | None = None,
+        opt: str | None = None,
     ) -> torch.Tensor:
         # if batch invariant mode is enabled, prefer DeepGEMM FP8 path
         # we will use BF16 dequant when DeepGEMM is not supported.
         if vllm_is_batch_invariant():
-            print("batch invariant", flush=True)
+            # print("batch invariant", flush=True)
             if self.block_quant:
                 assert self.weight_block_size is not None
                 return self.w8a8_block_fp8_linear.apply(
@@ -630,10 +634,9 @@ class Fp8LinearMethod(LinearMethodBase):
             )
 
         if self.block_quant:
-            print("not batch invariant", flush=True)
+            # print("not batch invariant", flush=True)
             assert self.weight_block_size is not None
-            # ETAI: THIS IS THE KERNEL THAT RUNS ON ADA (i think)
-            print("Using W8A8BlockFp8LinearOp", flush=True)
+            # print("Using W8A8BlockFp8LinearOp", flush=True)
             return self.w8a8_block_fp8_linear.apply(
                 input=x,
                 weight=layer.weight,
@@ -642,7 +645,10 @@ class Fp8LinearMethod(LinearMethodBase):
                 bias=bias,
             )
 
-        print("using fp8_linear", flush=True)
+        # print("using fp8_linear", flush=True)
+        # print("input_scale", layer.input_scale, flush=True)
+        # print("x shape:", x.shape, "stride:", x.stride(), "contig:", x.is_contiguous())
+        # print("weight shape:", layer.weight.shape, "stride:", layer.weight.stride(), "contig:", layer.weight.is_contiguous())
         return self.fp8_linear.apply(
             input=x,
             weight=layer.weight,
@@ -650,6 +656,7 @@ class Fp8LinearMethod(LinearMethodBase):
             out_dtype=self.out_dtype,
             input_scale=layer.input_scale,
             bias=bias,
+            opt=opt,
         )
 
 

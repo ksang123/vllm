@@ -239,23 +239,23 @@ class UnquantizedLinearMethod(LinearMethodBase):
         opt: str | None = None,
     ) -> torch.Tensor:
         # ETAI EDIT
-        use_custom = False
-        if use_custom and opt and "gate_up_proj" in opt:
-            M, K = x.shape
-            N = layer.weight.shape[0]
-            if M == 256 and K == 4096 and N == 24576 and bias is None:
-                import l40s_opt_v2
+        # use_custom = False
+        # if use_custom and opt and "gate_up_proj" in opt:
+        #     M, K = x.shape
+        #     N = layer.weight.shape[0]
+        #     if M == 256 and K == 4096 and N == 24576 and bias is None:
+        #         import l40s_opt_v2
                 
-                if not hasattr(layer, "_l40s_W"):
-                    layer._l40s_W = layer.weight.t()
-                    # print("running da kernel", flush=True)
+        #         if not hasattr(layer, "_l40s_W"):
+        #             layer._l40s_W = layer.weight.t()
+        #             # print("running da kernel", flush=True)
                 
-                if (not hasattr(layer, "_l40s_out") or layer._l40s_out.device != x.device or layer._l40s_out.dtype != x.dtype or layer._l40s_out.shape != (256, 24576)):
-                    layer._l40s_out = torch.empty((256, 24576), device=x.device, dtype=x.dtype)                
+        #         if (not hasattr(layer, "_l40s_out") or layer._l40s_out.device != x.device or layer._l40s_out.dtype != x.dtype or layer._l40s_out.shape != (256, 24576)):
+        #             layer._l40s_out = torch.empty((256, 24576), device=x.device, dtype=x.dtype)                
 
-                out = layer._l40s_out[:x.shape[0], :]
-                l40s_opt_v2.gate_up_gemm(x, layer._l40s_W, out)
-                return out
+        #         out = layer._l40s_out[:x.shape[0], :]
+        #         l40s_opt_v2.gate_up_gemm(x, layer._l40s_W, out)
+        #         return out
 
         return dispatch_unquantized_gemm()(layer, x, layer.weight, bias)
 
@@ -576,6 +576,7 @@ class ColumnParallelLinear(LinearBase):
     def forward(
         self,
         input_,
+        opt: str | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, Parameter | None]:
         bias = self.bias if not self.skip_bias_add else None
 
@@ -589,8 +590,8 @@ class ColumnParallelLinear(LinearBase):
 
         # Matrix multiply.
         assert self.quant_method is not None
-        output_parallel = self.quant_method.apply(self, input_, bias)
-        # output_parallel = self.quant_method.apply(self, input_, bias, opt=self.prefix)
+        # output_parallel = self.quant_method.apply(self, input_, bias)
+        output_parallel = self.quant_method.apply(self, input_, bias, opt=opt)
 
         if self.gather_output and self.tp_size > 1:
             # All-gather across the partitions.
@@ -1434,7 +1435,7 @@ class RowParallelLinear(LinearBase):
         # Only fuse bias add into GEMM for rank 0 (this ensures that
         # bias will not get added more than once in TP>1 case)
         bias_ = None if (self.tp_rank > 0 or self.skip_bias_add) else self.bias
-        output_parallel = self.quant_method.apply(self, input_parallel, bias_)
+        output_parallel = self.quant_method.apply(self, input_parallel, bias_, opt="down")
 
         if self.reduce_results and self.tp_size > 1:
             output = tensor_model_parallel_all_reduce(output_parallel)

@@ -201,11 +201,11 @@ class Qwen3DecoderLayer(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.mlp",
         )
-        print("============ QWEN3 STATS =============")
-        print(self.hidden_size)
-        print(config.intermediate_size)
-        print(config.hidden_act)
-        print(quant_config)
+        # print("============ QWEN3 STATS =============")
+        # print(self.hidden_size)
+        # print(config.intermediate_size)
+        # print(config.hidden_act)
+        # print(quant_config)
         self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = RMSNorm(
             config.hidden_size, eps=config.rms_norm_eps
