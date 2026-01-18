@@ -123,7 +123,7 @@ class Qwen2MLP(nn.Module):
         from vllm.utils.kernel_logger import log_kernel
         log_kernel(
             "qwen2_mlp_forward",
-            x.shape[0]
+            (x.shape[0])
         )
 
         return x
