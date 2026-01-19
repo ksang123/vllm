@@ -114,7 +114,7 @@ class Qwen2MLP(nn.Module):
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
 
-        out_fp8, scales = silu_kernel.silu_mul_row_fp8(gate_up)
+        out_fp8, scales = silu_kernel.silu_mul_row_fp8_gate_up(gate_up)
 
         end_event.record()
         torch.cuda.synchronize()
