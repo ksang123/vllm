@@ -123,6 +123,14 @@ class Qwen2MLP(nn.Module):
         print(f"out_fp8: {out_fp8.shape}, scales: {scales.shape}")
 
         x = self.act_fn(gate_up)
+
+        y = out_fp8 * scales.unsqueeze(-1)
+
+        # compare x and y values
+        print(f"x: {x.float()}, y: {y.float()}")
+        print(f"x - y max diff: {x.float() - y.float()}.abs().max()")
+        print(f"x - y mean diff: {x.float() - y.float()}.abs().mean()")
+
         x, _ = self.down_proj(x, opt="down_proj")
 
         # from vllm.utils.kernel_logger import log_kernel
