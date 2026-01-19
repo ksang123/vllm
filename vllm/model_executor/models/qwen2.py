@@ -128,8 +128,8 @@ class Qwen2MLP(nn.Module):
 
         # compare x and y values
         print(f"x: {x.float()}, y: {y.float()}")
-        print(f"x - y max diff: {x.float() - y.float()}.abs().max()")
-        print(f"x - y mean diff: {x.float() - y.float()}.abs().mean()")
+        print(f"x - y max diff: {(x.float() - y.float()).abs().max()}")
+        print(f"x - y mean diff: {(x.float() - y.float()).abs().mean()}")
 
         x, _ = self.down_proj(x, opt="down_proj")
 
