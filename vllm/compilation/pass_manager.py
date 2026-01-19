@@ -106,7 +106,10 @@ class PostGradPassManager(CustomGraphPass):
             if self.pass_config.fuse_norm_quant:
                 self.passes += [RMSNormQuantFusionPass(config)]
             if self.pass_config.fuse_act_quant:
+                print("adding activation quant fusion pass", flush=True)
                 self.passes += [ActivationQuantFusionPass(config)]
+            else:
+                print("not adding activation quant fusion pass", flush=True)
 
             if self.pass_config.fuse_attn_quant:
                 self.passes += [AttnFusionPass(config)]
