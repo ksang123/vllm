@@ -25,13 +25,13 @@
 # limitations under the License.
 """Inference-only Qwen2 model compatible with HuggingFace weights."""
 
-import silu_kernel
 from collections.abc import Iterable
 from itertools import islice
 import time
 from typing import Any
 
 import torch
+import silu_kernel
 from torch import nn
 from transformers import Qwen2Config
 
@@ -73,6 +73,38 @@ from .utils import (
     maybe_prefix,
 )
 
+_SILU_FP8_OP = None
+
+
+def _get_silu_fp8_op():
+    global _SILU_FP8_OP
+    if _SILU_FP8_OP is not None:
+        return _SILU_FP8_OP
+
+    if hasattr(torch, "compiler") and hasattr(torch.compiler, "allow_in_graph"):
+        torch.compiler.allow_in_graph(silu_kernel.silu_mul_row_fp8_gate_up)
+
+    try:
+        from torch.library import custom_op
+    except Exception:
+        _SILU_FP8_OP = silu_kernel.silu_mul_row_fp8_gate_up
+        return _SILU_FP8_OP
+
+    @custom_op("vllm::silu_mul_row_fp8_gate_up", mutates_args=())
+    def _op(gate_up: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return silu_kernel.silu_mul_row_fp8_gate_up(gate_up)
+
+    @_op.register_fake
+    def _(gate_up: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        m, k2 = gate_up.shape
+        k = k2 // 2
+        out = gate_up.new_empty((m, k), dtype=torch.float8_e4m3fn)
+        scales = gate_up.new_empty((m,), dtype=torch.float32)
+        return out, scales
+
+    _SILU_FP8_OP = _op
+    return _SILU_FP8_OP
+
 
 class Qwen2MLP(nn.Module):
     def __init__(
@@ -105,6 +137,7 @@ class Qwen2MLP(nn.Module):
                 f"Unsupported activation: {hidden_act}. Only silu is supported for now."
             )
         self.act_fn = SiluAndMul()
+        self.silu_fp8_op = _get_silu_fp8_op()
 
     def forward(self, x):
         # original implementation
@@ -114,7 +147,7 @@ class Qwen2MLP(nn.Module):
 
         # ETAI implementation
         gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
-        out_fp8, scales = silu_kernel.silu_mul_row_fp8_gate_up(gate_up)
+        out_fp8, scales = self.silu_fp8_op(gate_up)
         x, _ = self.down_proj(out_fp8, scales=scales, opt="non_quant_down_proj")
 
 
