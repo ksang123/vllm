@@ -25,6 +25,7 @@
 # limitations under the License.
 """Inference-only Qwen2 model compatible with HuggingFace weights."""
 
+import silu_kernel
 from collections.abc import Iterable
 from itertools import islice
 import time
@@ -107,19 +108,20 @@ class Qwen2MLP(nn.Module):
 
     def forward(self, x):
         gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
+        x = self.act_fn(gate_up)
 
         torch.cuda.synchronize()
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
 
-        x = self.act_fn(gate_up)
-
+        out_fp8, scales = silu_kernel.silu_mul_row_fp8(gate_up, x)
 
         end_event.record()
         torch.cuda.synchronize()
         elapsed_ms = start_event.elapsed_time(end_event)
-        print(f"qwen2_mlp_forward_ms: {elapsed_ms:.3f}")
+        print(f"silu_kernel_ms: {elapsed_ms:.3f}")
+        print(f"out_fp8: {out_fp8.shape}, scales: {scales.shape}")
 
         x, _ = self.down_proj(x, opt="down_proj")
 
