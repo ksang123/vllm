@@ -124,7 +124,7 @@ class Qwen2MLP(nn.Module):
 
         x = self.act_fn(gate_up)
 
-        y = out_fp8 * scales.unsqueeze(-1)
+        y = out_fp8.to(torch.float32) * scales.unsqueeze(-1)
 
         # compare x and y values
         print(f"x: {x.float()}, y: {y.float()}")
