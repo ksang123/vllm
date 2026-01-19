@@ -580,6 +580,7 @@ class Fp8LinearMethod(LinearMethodBase):
         self,
         layer: torch.nn.Module,
         x: torch.Tensor,
+        scales: torch.Tensor | None = None,
         bias: torch.Tensor | None = None,
         opt: str | None = None,
     ) -> torch.Tensor:
@@ -654,7 +655,7 @@ class Fp8LinearMethod(LinearMethodBase):
             weight=layer.weight,
             weight_scale=layer.weight_scale,
             out_dtype=self.out_dtype,
-            input_scale=layer.input_scale,
+            input_scale=scales,
             bias=bias,
             opt=opt,
         )

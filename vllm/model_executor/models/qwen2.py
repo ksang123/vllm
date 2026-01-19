@@ -107,31 +107,27 @@ class Qwen2MLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
+        # original implementation
+        # gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
+        # x = self.act_fn(gate_up)
+        # x, _ = self.down_proj(x, opt="down_proj")
+
+        # ETAI implementation
         gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
-
-        torch.cuda.synchronize()
-        start_event = torch.cuda.Event(enable_timing=True)
-        end_event = torch.cuda.Event(enable_timing=True)
-        start_event.record()
-
         out_fp8, scales = silu_kernel.silu_mul_row_fp8_gate_up(gate_up)
+        x, _ = self.down_proj(out_fp8, scales=scales, opt="non_quant_down_proj")
 
-        end_event.record()
-        torch.cuda.synchronize()
-        elapsed_ms = start_event.elapsed_time(end_event)
-        print(f"silu_kernel_ms: {elapsed_ms:.3f}")
-        print(f"out_fp8: {out_fp8.shape}, scales: {scales.shape}")
 
-        x = self.act_fn(gate_up)
+        # torch.cuda.synchronize()
+        # start_event = torch.cuda.Event(enable_timing=True)
+        # end_event = torch.cuda.Event(enable_timing=True)
+        # start_event.record()
 
-        y = out_fp8.to(torch.float32) * scales.unsqueeze(-1)
-
-        # compare x and y values
-        print(f"x: {x.float()}, y: {y.float()}")
-        print(f"x - y max diff: {(x.float() - y.float()).abs().max()}")
-        print(f"x - y mean diff: {(x.float() - y.float()).abs().mean()}")
-
-        x, _ = self.down_proj(x, opt="down_proj")
+        # end_event.record()
+        # torch.cuda.synchronize()
+        # elapsed_ms = start_event.elapsed_time(end_event)
+        # print(f"silu_kernel_ms: {elapsed_ms:.3f}")
+        # print(f"out_fp8: {out_fp8.shape}, scales: {scales.shape}")
 
         # from vllm.utils.kernel_logger import log_kernel
         # log_kernel(
