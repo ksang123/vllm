@@ -463,14 +463,21 @@ class Fp8LinearOp:
         # end_event = torch.cuda.Event(enable_timing=True)
         # start_event.record()
 
+
         if input.dtype != current_platform.fp8_dtype():
+            print(f"quantizing input {opt}", flush=True)
             qinput, x_scale = self.quant_fp8(
                 input_2d,
                 input_scale,
                 input_scale_ub,
             )
         else:
+            print(f"not quantizing input {opt}", flush=True)
             qinput, x_scale = input_2d, input_scale
+
+        print("input_dtype", input.dtype, flush=True)
+        print("qinput", qinput.shape, qinput.dtype, flush=True)
+        print("x_scale", x_scale.shape, x_scale.dtype, flush=True)
 
         # end_event.record()
         # torch.cuda.synchronize()
