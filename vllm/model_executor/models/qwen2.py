@@ -141,14 +141,14 @@ class Qwen2MLP(nn.Module):
 
     def forward(self, x):
         # original implementation
-        # gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
-        # x = self.act_fn(gate_up)
-        # x, _ = self.down_proj(x, opt="down_proj")
+        gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
+        x = self.act_fn(gate_up)
+        x, _ = self.down_proj(x, opt="down_proj")
 
         # ETAI implementation
-        gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
-        out_fp8, scales = self.silu_fp8_op(gate_up)
-        x, _ = self.down_proj(out_fp8, scales=scales, opt="non_quant_down_proj")
+        # gate_up, _ = self.gate_up_proj(x, opt="gate_up_proj")
+        # out_fp8, scales = self.silu_fp8_op(gate_up)
+        # x, _ = self.down_proj(out_fp8, scales=scales, opt="non_quant_down_proj")
 
 
         # torch.cuda.synchronize()
