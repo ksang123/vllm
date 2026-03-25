@@ -28,6 +28,7 @@
 from collections.abc import Iterable
 from itertools import islice
 from typing import Any
+import os
 
 import torch
 from torch import nn
@@ -80,6 +81,18 @@ from .utils import (
 )
 
 
+# ── flashMLP: load kernels at module level if enabled ──
+_FLASHMLP_ENABLED = os.environ.get("FLASHMLP", "0") == "1"
+print(f"[flashMLP] qwen2.py loaded, _FLASHMLP_ENABLED={_FLASHMLP_ENABLED}", flush=True)
+
+if _FLASHMLP_ENABLED:
+    import sys as _sys
+    _sys.path.insert(0, "/workspace/src/vllm_project/e2e/silu_kernel")
+    import flashmlp_ops  # registers torch.library ops
+    from vllm import _custom_ops as _flashmlp_ops
+    print("[flashMLP] Ops registered")
+
+
 class Qwen2MLP(nn.Module):
     def __init__(
         self,
@@ -109,10 +122,41 @@ class Qwen2MLP(nn.Module):
                 f"Unsupported activation: {hidden_act}. Only silu is supported for now."
             )
         self.act_fn = SiluAndMul()
+        self._flashmlp_ready = False
+
+    def _flashmlp_init(self):
+        """Pre-compute scalar scales. Must be called before torch.compile/graph capture."""
+        if self._flashmlp_ready:
+            return
+        self._gu_scale_f = float(self.gate_up_proj.weight_scale.max().item())
+        self._gu_quant_fp8 = self.gate_up_proj.quant_method.fp8_linear.quant_fp8
+        self._flashmlp_ready = True
 
     def forward(self, x):
-        gate_up, _ = self.gate_up_proj(x)
-        x = self.act_fn(gate_up)
+        if not _FLASHMLP_ENABLED:
+            gate_up, _ = self.gate_up_proj(x)
+            x = self.act_fn(gate_up)
+            x, _ = self.down_proj(x)
+            return x
+
+        # ── flashMLP path ──
+        x_2d = x.view(-1, x.shape[-1])
+        x_fp8, x_scale = self._gu_quant_fp8(x_2d)
+
+        k1_out, k1_scales = torch.ops.flashmlp.gate_up_swiglu_fp8(
+            x_fp8, x_scale, self.gate_up_proj.weight, self._gu_scale_f,
+        )
+
+        rq_out, rq_scales = torch.ops.flashmlp.requant_block64_to_row(
+            k1_out, k1_scales
+        )
+
+        out = _flashmlp_ops.cutlass_scaled_mm(
+            rq_out, self.down_proj.weight,
+            scale_a=rq_scales, scale_b=self.down_proj.weight_scale,
+            out_dtype=x.dtype,
+        )
+        return out
         x, _ = self.down_proj(x)
         return x
 

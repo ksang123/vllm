@@ -4,6 +4,7 @@
 import functools
 import gc
 import itertools
+import os
 import threading
 import time
 from collections import defaultdict
@@ -4497,6 +4498,14 @@ class GPUModelRunner(
                 self.model = model_loader.load_model(
                     vllm_config=self.vllm_config, model_config=self.model_config
                 )
+                # flashMLP: pre-compute scales before compile/graph capture
+                if os.environ.get("FLASHMLP", "0") == "1":
+                    count = 0
+                    for mod in self.model.modules():
+                        if hasattr(mod, '_flashmlp_init'):
+                            mod._flashmlp_init()
+                            count += 1
+                    print(f"[flashMLP] Initialized {count} MLP layers")
                 if self.lora_config:
                     self.model = self.load_lora_model(
                         self.model, self.vllm_config, self.device
